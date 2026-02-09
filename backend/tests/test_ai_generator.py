@@ -8,8 +8,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ai_generator import AIGenerator
 
-
 # --- Helpers to build mock response objects ---
+
 
 def make_text_block(text="Hello"):
     block = MagicMock()
@@ -18,7 +18,9 @@ def make_text_block(text="Hello"):
     return block
 
 
-def make_tool_use_block(name="search_course_content", tool_id="tool_1", tool_input=None):
+def make_tool_use_block(
+    name="search_course_content", tool_id="tool_1", tool_input=None
+):
     block = MagicMock()
     block.type = "tool_use"
     block.name = name
@@ -48,10 +50,13 @@ def mock_tool_manager():
     return tm
 
 
-DUMMY_TOOLS = [{"name": "search_course_content", "description": "test", "input_schema": {}}]
+DUMMY_TOOLS = [
+    {"name": "search_course_content", "description": "test", "input_schema": {}}
+]
 
 
 # --- Tests ---
+
 
 class TestDirectResponses:
     def test_direct_response_no_tools(self, generator):
@@ -69,7 +74,9 @@ class TestDirectResponses:
 
     def test_direct_response_with_tools_not_used(self, generator, mock_tool_manager):
         """Tools offered but Claude doesn't use them (stop_reason != tool_use)."""
-        text_resp = make_response(stop_reason="end_turn", content=[make_text_block("I know this")])
+        text_resp = make_response(
+            stop_reason="end_turn", content=[make_text_block("I know this")]
+        )
         generator.client.messages.create = MagicMock(return_value=text_resp)
 
         result = generator.generate_response(
@@ -86,12 +93,16 @@ class TestSingleToolRound:
         """One tool call -> results -> text answer. 2 API calls, 1 tool execution."""
         tool_resp = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("search_course_content", "t1", {"query": "AI"})]
+            content=[
+                make_tool_use_block("search_course_content", "t1", {"query": "AI"})
+            ],
         )
         # On intermediate round, Claude calls tool; on follow-up (with tools still attached
         # since round 0 < MAX-1), Claude returns text
         final_resp = make_response(content=[make_text_block("Here is the answer")])
-        generator.client.messages.create = MagicMock(side_effect=[tool_resp, final_resp])
+        generator.client.messages.create = MagicMock(
+            side_effect=[tool_resp, final_resp]
+        )
 
         result = generator.generate_response(
             "Search AI", tools=DUMMY_TOOLS, tool_manager=mock_tool_manager
@@ -99,7 +110,9 @@ class TestSingleToolRound:
 
         assert result == "Here is the answer"
         assert generator.client.messages.create.call_count == 2
-        mock_tool_manager.execute_tool.assert_called_once_with("search_course_content", query="AI")
+        mock_tool_manager.execute_tool.assert_called_once_with(
+            "search_course_content", query="AI"
+        )
 
 
 class TestTwoSequentialToolRounds:
@@ -108,18 +121,24 @@ class TestTwoSequentialToolRounds:
         # Round 0: initial call returns tool_use
         resp1 = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("get_course_outline", "t1", {"course": "MCP"})]
+            content=[
+                make_tool_use_block("get_course_outline", "t1", {"course": "MCP"})
+            ],
         )
         # Round 0 follow-up (tools attached): Claude calls another tool
         resp2 = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("search_course_content", "t2", {"query": "agents"})]
+            content=[
+                make_tool_use_block("search_course_content", "t2", {"query": "agents"})
+            ],
         )
         # Round 1 follow-up (no tools): Claude returns text
         resp3 = make_response(content=[make_text_block("Combined answer")])
 
         generator.client.messages.create = MagicMock(side_effect=[resp1, resp2, resp3])
-        mock_tool_manager.execute_tool = MagicMock(side_effect=["outline data", "content data"])
+        mock_tool_manager.execute_tool = MagicMock(
+            side_effect=["outline data", "content data"]
+        )
 
         result = generator.generate_response(
             "Multi-step question", tools=DUMMY_TOOLS, tool_manager=mock_tool_manager
@@ -140,11 +159,13 @@ class TestTwoSequentialToolRounds:
         """After 2 tool rounds, final call has no tools attached."""
         resp1 = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("get_course_outline", "t1", {"course": "X"})]
+            content=[make_tool_use_block("get_course_outline", "t1", {"course": "X"})],
         )
         resp2 = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("search_course_content", "t2", {"query": "Y"})]
+            content=[
+                make_tool_use_block("search_course_content", "t2", {"query": "Y"})
+            ],
         )
         resp3 = make_response(content=[make_text_block("Final")])
 
@@ -179,11 +200,19 @@ class TestErrorHandling:
         """execute_tool raises -> is_error result, Claude still responds."""
         tool_resp = make_response(
             stop_reason="tool_use",
-            content=[make_tool_use_block("search_course_content", "t1", {"query": "fail"})]
+            content=[
+                make_tool_use_block("search_course_content", "t1", {"query": "fail"})
+            ],
         )
-        final_resp = make_response(content=[make_text_block("Sorry, I couldn't find that")])
-        generator.client.messages.create = MagicMock(side_effect=[tool_resp, final_resp])
-        mock_tool_manager.execute_tool = MagicMock(side_effect=RuntimeError("DB connection failed"))
+        final_resp = make_response(
+            content=[make_text_block("Sorry, I couldn't find that")]
+        )
+        generator.client.messages.create = MagicMock(
+            side_effect=[tool_resp, final_resp]
+        )
+        mock_tool_manager.execute_tool = MagicMock(
+            side_effect=RuntimeError("DB connection failed")
+        )
 
         result = generator.generate_response(
             "bad query", tools=DUMMY_TOOLS, tool_manager=mock_tool_manager
@@ -193,7 +222,9 @@ class TestErrorHandling:
         assert generator.client.messages.create.call_count == 2
 
         # Verify the tool result sent to Claude has is_error=True
-        second_call_messages = generator.client.messages.create.call_args_list[1][1]["messages"]
+        second_call_messages = generator.client.messages.create.call_args_list[1][1][
+            "messages"
+        ]
         tool_result_msg = second_call_messages[2]  # user message with tool_results
         assert tool_result_msg["content"][0]["is_error"] is True
         assert "DB connection failed" in tool_result_msg["content"][0]["content"]
@@ -203,11 +234,13 @@ class TestErrorHandling:
         # Response has both a text block and a tool_use block, but stop_reason is tool_use
         resp = make_response(
             stop_reason="tool_use",
-            content=[make_text_block("Partial text"), make_tool_use_block()]
+            content=[make_text_block("Partial text"), make_tool_use_block()],
         )
         generator.client.messages.create = MagicMock(return_value=resp)
 
-        result = generator.generate_response("query", tools=DUMMY_TOOLS, tool_manager=None)
+        result = generator.generate_response(
+            "query", tools=DUMMY_TOOLS, tool_manager=None
+        )
 
         assert result == "Partial text"
         assert generator.client.messages.create.call_count == 1
@@ -219,7 +252,9 @@ class TestSystemPromptAndExtraction:
         text_resp = make_response(content=[make_text_block("answer")])
         generator.client.messages.create = MagicMock(return_value=text_resp)
 
-        generator.generate_response("question", conversation_history="User: hi\nAI: hello")
+        generator.generate_response(
+            "question", conversation_history="User: hi\nAI: hello"
+        )
 
         call_kwargs = generator.client.messages.create.call_args[1]
         assert "Previous conversation:" in call_kwargs["system"]
@@ -229,10 +264,7 @@ class TestSystemPromptAndExtraction:
         """TextBlock not at index 0 -> still found correctly."""
         tool_block = make_tool_use_block()
         text_block = make_text_block("The real answer")
-        resp = make_response(
-            stop_reason="end_turn",
-            content=[tool_block, text_block]
-        )
+        resp = make_response(stop_reason="end_turn", content=[tool_block, text_block])
         generator.client.messages.create = MagicMock(return_value=resp)
 
         result = generator.generate_response("query")
