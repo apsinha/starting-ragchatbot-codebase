@@ -15,4 +15,8 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "black>=24.0"]
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
